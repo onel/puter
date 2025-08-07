@@ -18,6 +18,15 @@
  */
 
 // METADATA // {"ai-commented":{"service":"xai"}}
+/**
+ * Inserts a record into the specified database table.
+ * Constructs an INSERT SQL statement using the object keys as column names
+ * and the object values as the data to insert.
+ * 
+ * @param {string} tbl - The name of the database table to insert into
+ * @param {Object} subject - The object containing key-value pairs to insert
+ * @returns {Promise<void>} A promise that resolves when the insertion is complete
+ */
 const insert = async (tbl, subject) => {
     const keys = Object.keys(subject);
 
