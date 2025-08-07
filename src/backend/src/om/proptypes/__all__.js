@@ -25,7 +25,17 @@ const { is_valid_path } = require("../../filesystem/validation");
 const FSNodeContext = require("../../filesystem/FSNodeContext");
 const { Entity } = require("../entitystorage/Entity");
 
+/**
+ * Error class for object mapping type validation failures.
+ * Thrown when a value doesn't match the expected type during adaptation or validation.
+ */
 class OMTypeError extends Error {
+    /**
+     * Creates a new OMTypeError with a formatted message.
+     * @param {Object} params - Error parameters
+     * @param {string} params.expected - The expected type name
+     * @param {string} params.got - The actual type that was received
+     */
     constructor ({ expected, got }) {
         const message = `expected ${expected}, got ${got}`;
         super(message);
@@ -34,16 +44,39 @@ class OMTypeError extends Error {
 }
 
 module.exports = {
+    /**
+     * Base type that all other types can inherit from.
+     * Provides fundamental type checking functionality.
+     */
     base: {
+        /**
+         * Checks if a value is considered "set" (truthy).
+         * @param {*} value - The value to check
+         * @returns {boolean} True if the value is truthy, false otherwise
+         */
         is_set (value) {
             return !! value;
         },
     },
+    /**
+     * JSON type for handling JSON data structures.
+     * Inherits all functionality from the base type.
+     */
     json: {
         from: 'base',
     },
+    /**
+     * String type with validation and adaptation capabilities.
+     * Handles string conversion, length validation, and regex matching.
+     */
     string: {
         from: 'base',
+        /**
+         * Adapts a value to a string, handling undefined and null values.
+         * @param {*} value - The value to adapt to a string
+         * @returns {Promise<string>} The adapted string value
+         * @throws {OMTypeError} When the value cannot be converted to a string
+         */
         async adapt (value) {
             if ( value === undefined ) return '';
 
@@ -56,6 +89,15 @@ module.exports = {
             }
             return value;
         },
+        /**
+         * Validates a string value against length and regex constraints.
+         * @param {*} value - The value to validate
+         * @param {Object} params - Validation parameters
+         * @param {string} params.name - The field name for error reporting
+         * @param {Object} params.descriptor - Field descriptor with validation rules
+         * @returns {boolean|Error} True if valid, Error object if invalid
+         * @throws {APIError} When length constraints are violated
+         */
         validate (value, { name, descriptor }) {
             if ( typeof value !== 'string' ) {
                 return new OMTypeError({ expected: 'string', got: typeof value });
@@ -72,8 +114,21 @@ module.exports = {
             return true;
         }
     },
+    /**
+     * Array type with length and modulo validation.
+     * Validates array structure and applies length constraints.
+     */
     array: {
         from: 'base',
+        /**
+         * Validates an array value against length and modulo constraints.
+         * @param {*} value - The value to validate as an array
+         * @param {Object} params - Validation parameters
+         * @param {string} params.name - The field name for error reporting
+         * @param {Object} params.descriptor - Field descriptor with validation rules
+         * @returns {boolean|OMTypeError} True if valid, OMTypeError if invalid
+         * @throws {APIError} When array constraints are violated
+         */
         validate (value, { name, descriptor }) {
             if ( ! Array.isArray(value) ) {
                 return new OMTypeError({ expected: 'array', got: typeof value });
@@ -90,7 +145,18 @@ module.exports = {
             return true;
         }
     },
+    /**
+     * Boolean flag type that handles various truthy/falsy representations.
+     * Converts numeric and string representations to boolean values.
+     */
     flag: {
+        /**
+         * Adapts various value types to boolean flags.
+         * Handles undefined, numeric (0/1), and string ('0'/'1') representations.
+         * @param {*} value - The value to adapt to a boolean
+         * @returns {boolean} The adapted boolean value
+         * @throws {OMTypeError} When the value cannot be converted to a boolean
+         */
         adapt: value => {
             if ( value === undefined ) return false;
             if ( value === 0 ) value = false;
@@ -103,14 +169,34 @@ module.exports = {
             return value;
         }
     },
+    /**
+     * UUID type that validates UUID version 4 format.
+     * Extends string type with UUID-specific validation.
+     */
     uuid: {
         from: 'string',
+        /**
+         * Validates that a string is a valid UUID version 4.
+         * @param {string} value - The UUID string to validate
+         * @returns {boolean} True if the value is a valid UUID v4
+         */
         validate (value) {
             return is_valid_uuid4(value);
         },
     },
+    /**
+     * Puter-specific UUID type with prefix validation and generation.
+     * Handles UUIDs with custom prefixes for different entity types.
+     */
     ['puter-uuid']: {
         from: 'string',
+        /**
+         * Validates that a UUID has the correct prefix and valid UUID format.
+         * @param {string} value - The prefixed UUID to validate
+         * @param {Object} params - Validation parameters
+         * @param {Object} params.descriptor - Field descriptor containing the required prefix
+         * @returns {boolean|Error} True if valid, Error if prefix is missing or UUID is invalid
+         */
         validate (value, { descriptor }) {
             const prefix = descriptor.prefix + '-';
             if ( ! value.startsWith(prefix) ) {
@@ -118,14 +204,29 @@ module.exports = {
             }
             return is_valid_uuid(value.slice(prefix.length));
         },
+        /**
+         * Generates a new prefixed UUID using the descriptor's prefix.
+         * @param {Object} params - Factory parameters
+         * @param {Object} params.descriptor - Field descriptor containing the prefix
+         * @returns {string} A new prefixed UUID
+         */
         factory ({ descriptor }) {
             const prefix = descriptor.prefix + '-';
             const uuid = require('uuid').v4();
             return prefix + uuid;
         },
     },
+    /**
+     * Base64-encoded image type with security validation.
+     * Validates data URI format and prevents XSS attacks.
+     */
     ['image-base64']: {
         from: 'string',
+        /**
+         * Validates that a string is a base64-encoded image and safe from XSS.
+         * @param {string} value - The base64 image string to validate
+         * @returns {Error|undefined} Error if validation fails, undefined if valid
+         */
         validate (value) {
             if ( ! value.startsWith('data:image/') ) {
                 return new Error('image must be base64 encoded');
@@ -137,8 +238,18 @@ module.exports = {
             }
         }
     },
+    /**
+     * URL type that validates URL format including localhost support.
+     * Uses the validator library for URL validation.
+     */
     url: {
         from: 'string',
+        /**
+         * Validates that a string is a properly formatted URL.
+         * Accepts standard URLs and localhost URLs.
+         * @param {string} value - The URL string to validate
+         * @returns {boolean} True if the URL is valid
+         */
         validate (value) {
             let valid = validator.isURL(value);
             if ( ! valid ) {
@@ -147,8 +258,19 @@ module.exports = {
             return valid;
         }
     },
+    /**
+     * Reference type for handling entity relationships and SQL references.
+     * Manages conversion between entities and their database representations.
+     */
     reference: {
         from: 'base',
+        /**
+         * Converts an entity reference to its SQL representation.
+         * @param {*} value - The entity or reference value
+         * @param {Object} params - Reference parameters
+         * @param {Object} params.descriptor - Field descriptor with service information
+         * @returns {Promise<*>} The SQL reference value (typically an ID)
+         */
         async sql_reference (value, { descriptor }) {
             if ( ! descriptor.service ) return value;
             if ( ! value ) return null;
@@ -157,6 +279,13 @@ module.exports = {
             }
             return value.id;
         },
+        /**
+         * Converts a SQL reference back to an entity object.
+         * @param {*} value - The SQL reference value (typically an ID)
+         * @param {Object} params - Reference parameters
+         * @param {Object} params.descriptor - Field descriptor with service information
+         * @returns {Promise<Entity|*>} The dereferenced entity or original value
+         */
         async sql_dereference (value, { descriptor }) {
             if ( ! descriptor.service ) return value;
             if ( ! value ) return null;
@@ -164,6 +293,13 @@ module.exports = {
             const entity = await svc.read(value);
             return entity;
         },
+        /**
+         * Adapts a reference value to an entity, loading it if necessary.
+         * @param {*} value - The reference value to adapt
+         * @param {Object} params - Adaptation parameters
+         * @param {Object} params.descriptor - Field descriptor with service and debug information
+         * @returns {Promise<Entity|*>} The adapted entity or original value
+         */
         async adapt (value, { descriptor }) {
             if ( descriptor.debug ) {
                 debugger; // eslint-disable-line no-debugger
@@ -177,11 +313,25 @@ module.exports = {
             return entity;
         }
     },
+    /**
+     * Datetime type for handling date and time values.
+     * Inherits base functionality without additional processing.
+     */
     datetime: {
         from: 'base',
     },
+    /**
+     * Puter filesystem node type for handling file system references.
+     * Manages conversion between node contexts and database representations.
+     */
     ['puter-node']: {
         // from: 'base',
+        /**
+         * Converts a filesystem node to its SQL reference (MySQL ID).
+         * @param {FSNodeContext|null} value - The filesystem node context
+         * @returns {Promise<number|null>} The MySQL ID or null
+         * @throws {Error} When value is not an FSNodeContext
+         */
         async sql_reference (value) {
             if ( value === null ) return null;
             if ( ! (value instanceof FSNodeContext) ) {
@@ -190,9 +340,20 @@ module.exports = {
             await value.fetchEntry();
             return value.mysql_id ?? null;
         },
+        /**
+         * Checks if a filesystem node value is considered set.
+         * @param {*} value - The value to check
+         * @returns {Promise<boolean>} True if the value is set or explicitly null
+         */
         async is_set (value) {
             return ( !! value ) || value === null;
         },
+        /**
+         * Converts a MySQL ID back to a filesystem node context.
+         * @param {number|null} value - The MySQL ID to dereference
+         * @returns {Promise<FSNodeContext|null>} The filesystem node context or null
+         * @throws {Error} When value is not a number
+         */
         async sql_dereference (value) {
             if ( value === null ) return null;
             if ( typeof value !== 'number' ) {
@@ -205,6 +366,16 @@ module.exports = {
                 new NodeInternalIDSelector('mysql', value)
             );
         },
+        /**
+         * Adapts various input formats to a filesystem node context.
+         * Handles UUIDs, paths (including ~ for home directory), and existing contexts.
+         * @param {string|FSNodeContext|null} value - The value to adapt
+         * @param {Object} params - Adaptation parameters
+         * @param {string} params.name - The field name for error reporting
+         * @returns {Promise<FSNodeContext|null>} The adapted filesystem node context
+         * @throws {Error} When ~ is used without a user context
+         * @throws {APIError} When the path format is invalid
+         */
         async adapt (value, { name }) {
             if ( value === null ) return null;
 
@@ -244,6 +415,14 @@ module.exports = {
             const node = await svc_fs.node(selector);
             return node;
         },
+        /**
+         * Validates filesystem node access permissions for the current actor.
+         * @param {FSNodeContext|null} value - The filesystem node to validate
+         * @param {Object} params - Validation parameters
+         * @param {string} params.name - The field name for error reporting
+         * @param {Object} params.descriptor - Field descriptor with permission requirements
+         * @returns {Promise<APIError|undefined>} APIError if validation fails, undefined if valid
+         */
         async validate (value, { name, descriptor }) {
             if ( value === null ) return;
             const actor = Context.get('actor');
