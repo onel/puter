@@ -19,6 +19,14 @@
 
 const APIError = require("../api/APIError");
 
+/**
+ * Creates an anti-CSRF middleware that validates CSRF tokens in request bodies.
+ * The middleware checks for the presence of an anti_csrf token in the request body
+ * and validates it using the anti-csrf service.
+ * 
+ * @param {Object} options - Configuration options for the middleware
+ * @returns {Function} Express middleware function that validates CSRF tokens
+ */
 const anticsrf = options => async (req, res, next) => {
     const svc_antiCSRF = req.services.get('anti-csrf');
     if ( ! req.body.anti_csrf ) {

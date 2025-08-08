@@ -19,6 +19,17 @@
 const APIError = require("../api/APIError");
 const { Context } = require("../util/context");
 
+/**
+ * Creates an Express middleware function for abuse prevention.
+ * Validates requests based on bot detection and origin requirements.
+ * 
+ * @param {Object} options - Configuration options for abuse prevention
+ * @param {boolean} [options.no_bots] - If true, blocks requests from bots
+ * @param {Function} [options.shadow_ban_responder] - Custom response handler for shadow-banned bots
+ * @param {boolean} [options.puter_origin] - If true, only allows requests from Puter origin
+ * @returns {Function} Express middleware function that takes (req, res, next) parameters
+ * @throws {APIError} Throws 'forbidden' error when validation fails
+ */
 const abuse = options => (req, res, next) => {
     const requester = Context.get('requester');
 
